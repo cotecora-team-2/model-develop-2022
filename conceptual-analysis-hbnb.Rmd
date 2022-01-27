@@ -1,0 +1,180 @@
+---
+title: "Análisis conceptual - modelo jerárquico BN"
+author: "M. Anzarut, F. González, T. Ortiz"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(quickcountmx)
+knitr::opts_chunk$set(echo = TRUE)
+parametros <- jsonlite::read_json("./data/prior_data.json", simplifyVector = TRUE)
+```
+
+## Análisis conceptual
+
+Buscamos predecir la proporción de votos para un candidato
+a gobernador (Elección 2021) usando votos registrados en una muestra 
+estratificada proporcional de las casillas del estado correspondiente.
+
+Cada estrato $s$ tiene $N_s$ casillas. Denotamos
+por: 
+
+- $y_{i}$ los votos obtenidos para un candidato particular en la casilla $i$ 
+- $s(i)$ es el estrato al que pertenece la casilla $i$
+- $n_{i}$ el tamaño de la lista nominal para la casilla $i$ 
+- $obs_{i}$ es una variable indicadora si la casilla $i$ está en la muestra
+- $x_{i,m}$ es una matriz de $m$ covariables asociados a cada casilla $i$
+
+## Datos y estadísticas resumen
+
+Los datos que tendremos antes de observar la muestra son: la estratificación, incluyendo
+el número de casillas por estrato para la población, 
+ las covariables $x_{i,m}$, así como la lista nominal de cada casilla $n_i$.
+
+Con la muestra observaremos el número de votos para cada candidato $k$ en la
+casilla $i$ $y_{i,k}$ para algunas casillas, junto con los
+estratos $s(i)$ a la que pertenecen. Denotamos por $y_{p+1}$ a la votación total.
+
+Los resúmenes de interés principal son:
+
+1. El número total de votos $\sum_{i,k} y_{i,k}$, donde la suma es sobre todas las casillas y
+la partipación ciudadana $\sum_{i,k} y_{i,k} / \sum_i n_i$
+2. La proporción de votos de cada  candidato sobre el total de votos, que es
+ $$p_k = \frac{\sum_{i} y_{i,k}} {\sum_{i,k} y_{i,k}}$$
+
+
+## Definición del modelo
+
+Modelamos el número total de votos emitidos en la casilla $i$ como
+
+$$y_{i} \sim \textrm{NegBin} \left( \mu_{i}, \phi_{i} \right)$$
+- El valor esperado de $y_{i}$ es $\mu_{i} = n_i\omega_i$, donde $\omega_i$, la proporción de partipación en la casilla $i$ depende de
+las covariables, y la varianza es $\mu_{i}(1 + \mu_{i}/\phi_{i})$.
+- El valor de la sobredispersión es fijado en $\phi_{i} = \frac{n_i\omega_i}{\kappa_{s(i)}}$.
+- La varianza se simplifica entonces a $n_i\omega_i\left(1 + {\kappa_{s(i)}}\right)$
+
+Ponemos 
+
+$$\omega_i = \textrm{invlogit}( x_i^t\beta_{s(i)}^{part}),$$ 
+
+donde $x_{i}$ es el vector
+de covariables centradas y estandarizadas para la casilla $i$. Estas covariables
+se conocen de antemano, y $\beta_{s}^{part}$ es el vector de coeficientes para
+cada covariable en cada estrato.
+
+
+Modelamos el número de votos obtenidos para el candidato $k$ como
+$$y_{i,k} \sim \textrm{NegBin} \left( \mu_{i,k}, \phi_{i,k} \right)$$
+
+la parametrización de la binomial negativa que seleccionamos es en la que
+
+- El valor esperado de $y_{i,k}$ es $\mu_{i,k} = n_i\omega_i\theta_{i,k}$, donde $\theta_{i,k}$, la proporción de votos obtenida por el candidasto $k$ en la casilla $i$ depende de
+las covariables, y la varianza es $\mu_{i,k}(1 + \mu_{i,k}/\phi_{i,k})$.
+- El valor de la sobredispersión es $\phi_{i,k} = \frac{n_i\omega_i\theta_{i,k}}{\kappa_{s(i), k}}$.
+- La varianza se simplifica entonces a $n_i\omega_i\theta_{i,k}\left(1 + {\kappa_{s(i),k}}\right)$
+
+
+El vector  $\theta_i = (\theta_{i,1}, \theta_{i, 2}, \ldots, \theta_{i,p})$ está
+dado, de acuerdo a la liga logit multinomial, como
+
+$$\theta_{i} = \textrm{softmax}(x_{i}^t \beta_{s(i)}^{(1)}, 
+x_{i}^t \beta_{s(i)}^{(2)}, 
+\ldots,  x_{i}^t \beta_{s(i)}^{(p)}),$$ 
+donde recordamos que
+$$\textrm{softmax}(z_1,\ldots, z_p)_j =\frac{\exp(z_j)}{\sum_i \exp (z_i)}$$
+
+Tanto en el caso de la participación como la proporción de votos
+para cada candidato, modelamos los coeficientes de manera
+jerárquica con una distribución poblacional normal multivariada para los estratos. Para
+cada estrato $s$,
+
+$$\beta_{s}^{part} \sim N(\beta_{0}^{part}, \Sigma^{part})$$
+y para cada candidatos $k = 1,2,\dots, p$ ponemos también:
+
+$$\beta_{s}^{(k)} \sim N(\beta_{0}^{(k)}, \Sigma_k)$$
+Como iniciales para los parámetros poblacionales (que tiene variables escaladas $x$ apropiadamente), ponemos
+
+$$\beta_0^{part} \sim N(0, I),\,\, \Sigma^{part} \sim LKJ(2)$$
+
+y igualmente para los coeficientes de cada candidatos
+
+$$\beta_0^{(k)} \sim N(0, I), \Sigma_k \sim LKJ(2)$$
+
+### Varianza y sobredispersión
+
+Para la sobredispersión de la binomial negativa, ponemos
+$$\kappa_{s, k} \sim \textrm{Gamma}(`r parametros$kappa_param[1]`, `r parametros$kappa_param[2]`)$$
+Recordamos que la varianza es
+$$n_i\theta_{i,k}\omega_i\left(1 + \kappa_{s(i),k}\right)$$
+De modo que el factor que multiplica a $n_i\omega_i\theta_{i,k}$ va típicamente de un poco más de
+1 (en cuyo caso la varianza $n_i\omega_i\theta_i$) hasta alrededor de 40, que tiene sobredispersión considerablemente mayor en relación a la Poisson.
+
+```{r}
+x <- rgamma(100000, parametros$kappa_param[1], parametros$kappa_param[2])
+quantile(1+x, probs = c(0.01, 0.025, 0.5, 0.975, 0.99)) 
+```
+En Stan, el modelo es 
+
+```{bash}
+cat stan/model_parties_mlogit_corr.stan
+```
+
+
+
+## Proceso de estimación
+
+Una vez que obtenemos simulaciones posteriores de los parámetros, usamos estos
+para simular la posterior de **todas las casillas** del marco muestral. Es decir, 
+simulamos el total de votos
+
+$$t = \sum_{i\in S} y_i + \sum_{i\notin S} \tilde{y}_i$$
+donde el primer término es conocido y son los valores observados de las casillas
+en muestra, y el otro se simula mediante la predictiva posterior, incluyendo
+las covariables a nivel casilla, sección y distrito que están representadas en $x$
+
+Una vez que estimamos el total de votos para cada casilla, estimamos la proporción
+de votos para cad candidatos como:
+
+$$p_k = \frac{\sum_i y_{i,k}+ \sum_{i\notin S} \tilde{y_i}\theta_{i,k}}{\sum_i y_i + \sum_{i\notin S}\tilde{y}_i}$$
+Por definición , tenemos que $\sum_k p_k = 1$
+
+
+### Muestras incompletas
+
+En todos los conteos rápidos que se han llevado a cabo, federales y estatales,
+una proporción considerable de las casillas (de 10% a 50%) está censurada por el tiempo. Esto 
+implica que los parámetros estimados tendran sesgo con respecto a los poblacionales,
+como ha sido estudiado por ejemplo en 
+[este análisis para las elecciones de 2018](https://sim-llegadas-3e5e7b.netlify.app/). 
+Consideramos entonces en la etapa de simulación que los valores $\theta_i$ 
+(proporción de votos obtenida en cada casilla sobre la lista nominal) pueden estar sesgados.
+Recordamos que tenemos:
+
+$$y_{i} \sim \textrm{NegBin} \left( \mu_i, \phi_i \right)$$
+
+donde $\mu_i = n_i \omega_i\theta_i$, y si $\alpha_i = \beta_0 + \beta_{st} + x_i^t\beta$
+
+$$\theta_i = \textrm{softmax}_i (\alpha_1, \ldots, \alpha_p)$$
+Proponemos entonces hacer la simulación tomando
+en su lugar
+$$\theta'_i = \textrm{softmax}(\alpha_1 + w_1,\ldots, \alpha_i + w_i, \ldots, \alpha_p+w_p)$$
+donde $w_i\sim N(0, s)$. 
+
+El valor $s$ se fija de acuerdo al sesgo que hemos observado en 
+elecciones pasadas en estas proporciones $\theta_i$ cuando existen muestras incompletas, considerando
+que (aproximando a primer orden):
+$$\theta'_i - \theta_i \approx \theta_i(1-\theta_i) w.$$
+Fijando entonces $\theta_i$ obtenemos que 2 desviaciones estándar de esta cantidad son
+aproximadamente
+
+$$2 \theta_i(1-\theta_i) s$$
+En [este análisis de 2018](https://sim-llegadas-3e5e7b.netlify.app/) encontramos que el
+sesgo observado sobre varios estados para estimar la proporción de
+votos $\theta$ de un candidato, cuando se ha observado solamente $p_{obs}$ de la muestra,
+está en su mayor parte acotada por arriba por
+$$\frac{\theta(1-\theta)(1-p_{obs})}{5}$$
+De forma que igualando con la cantidad de arriba, obtenemos
+$$s = \frac{1 - p_{obs}}{10}.$$
+
+La implementación en Stan se puede ver en el bloque de cantidades generadas mostrado arriba.
