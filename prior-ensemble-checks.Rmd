@@ -1,0 +1,49 @@
+---
+title: "ensemble_checks"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(cmdstanr)
+library(quickcountmx)
+estado <- "ZACATECAS"
+source("R/prep_reportes.R")
+```
+
+
+
+```{r}
+print(parametros)
+```
+
+```{r}
+sim_datos$p <- 5
+sim_ensemble_datos <- c(sim_datos, parametros)
+ruta <- file.path("./stan/simular_ensemble_mlogit_corr.stan")
+modelo_inicial <- cmdstan_model(ruta)
+ensemble <- modelo_inicial$sample(
+    data = sim_ensemble_datos,
+    iter_sampling = 1000, iter_warmup = 0, 
+    chains = 1,
+    refresh = 100, seed = 432,
+    fixed_param = TRUE)
+```
+
+```{r}
+sims_ensemble_tbl <- ensemble$draws() %>% as_draws_df()
+total_nominal <- sim_ensemble_datos$n_f %>% sum
+votos_tbl <- sims_ensemble_tbl %>% select(.draw, contains("prop_votos")) 
+#qplot(sims_ensemble_tbl$y_out / total_nominal, binwidth = 0.025 )
+```
+
+```{r}
+g_1 <- ggplot(votos_tbl, aes(x = `prop_votos[1]`, y = `prop_votos[2]`)) +
+  geom_point(size=0.5)  + xlim(c(0,1)) + ylim(c(0,1)) + 
+  xlab("Proportion candidate 1") +
+  ylab("Proportion candidate 2") +
+  labs(subtitle = "NBM model")
+votos_tbl |> summarise(across(everything(), mean))
+g_1 + coord_equal()
+```
+
