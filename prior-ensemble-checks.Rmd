@@ -46,4 +46,7 @@ g_1 <- ggplot(votos_tbl, aes(x = `prop_votos[1]`, y = `prop_votos[2]`)) +
 votos_tbl |> summarise(across(everything(), mean))
 g_1 + coord_equal()
 ```
+```{r}
+qplot(sims_ensemble_tbl$participacion)
+```
 
