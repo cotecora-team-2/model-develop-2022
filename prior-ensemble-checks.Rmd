@@ -32,7 +32,7 @@ ensemble <- modelo_inicial$sample(
 
 ```{r}
 sims_ensemble_tbl <- ensemble$draws() %>% as_draws_df()
-total_nominal <- sim_ensemble_datos$n_f %>% sum
+total_nominal <- sim_ensemble_datos$n_f %>% sum()
 votos_tbl <- sims_ensemble_tbl %>% select(.draw, contains("prop_votos")) 
 #qplot(sims_ensemble_tbl$y_out / total_nominal, binwidth = 0.025 )
 ```
@@ -46,7 +46,25 @@ g_1 <- ggplot(votos_tbl, aes(x = `prop_votos[1]`, y = `prop_votos[2]`)) +
 votos_tbl |> summarise(across(everything(), mean))
 g_1 + coord_equal()
 ```
-```{r}
-qplot(sims_ensemble_tbl$participacion)
+```{r, fig.width = 3, fig.height=2}
+qplot(sims_ensemble_tbl$participacion, bins = 30)
 ```
+
+```{r, fig.height = 6, fig.width = 5}
+theta <- sims_ensemble_tbl |> select(contains("theta_f["))
+sim_1 <- theta |> mutate(num_sim = row_number()) |> 
+  filter(num_sim <= 20) |> 
+  pivot_longer(contains("theta"), "variable") |> 
+  separate(variable, into = c("nom", "f", "casilla", "cand", "b")) |> 
+  select(-b, -f)
+```
+
+
+```{r, fig.height = 10, fig.width = 8}
+ggplot(sim_1 |> filter(num_sim > 10), aes(x = value)) + 
+  geom_rug(colour = "salmon", outside = FALSE) +
+  geom_histogram(bins = 30, fill = "gray40") + 
+  facet_grid(num_sim ~ cand) 
+```
+
 

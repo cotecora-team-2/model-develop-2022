@@ -69,16 +69,16 @@ generated quantities {
   vector<lower=0>[n_strata_f] kappa_part;
   // transformed
   //matrix[N_f,p] pred;
-  vector[p] theta[N_f];
-  vector[N_f] alpha_bn[p];
-  vector[N_f] theta_part;
-  vector[N_f] alpha_bn_part;
+  //vector[p] theta[N_f];
+  //vector[N_f] alpha_bn[p];
+  //vector[N_f] theta_part;
+  //vector[N_f] alpha_bn_part;
   //vector[N_f] pred_part;
   matrix<lower=0>[n_strata_f, p] kappa;
   vector[p] y_out;
   // generated
   real prop_votos[p];
-  vector[p] theta_f;
+  vector[p] theta_f[N_f];
   real alpha_bn_f_part;
   vector[p] alpha_bn_f;
   vector[p] pred_f;
@@ -95,13 +95,13 @@ generated quantities {
   }
   // pop paramaters
   for(k in 1:p){
-    beta_0[k] = to_vector(normal_rng(zeros, 2));
+    beta_0[k] = to_vector(normal_rng(zeros, 1));
     Omega[k] = lkj_corr_rng(n_covariates_f+1, 2);
-    sigma[k] =to_vector(fabs(normal_rng(zeros, 2)));
+    sigma[k] = to_vector(fabs(normal_rng(zeros, 0.2)));
   }
-  beta_0_part = to_vector(normal_rng(zeros, 2));
+  beta_0_part = to_vector(normal_rng(zeros, 1));
   Omega_part = lkj_corr_rng(n_covariates_f+1, 2);
-  sigma_part = to_vector(fabs(normal_rng(zeros, 2)));
+  sigma_part = to_vector(fabs(normal_rng(zeros, 0.2)));
 
 
 
@@ -146,8 +146,8 @@ generated quantities {
     for(k in 1:p){
         pred_f[k] = dot_product(x1_f[i,] , beta[k][stratum_f[i]]);
     }
-      theta_f = softmax(to_vector(pred_f));
-      alpha_bn_f =  n_f[i] * theta_f * theta_f_total[i];
+      theta_f[i] = softmax(to_vector(pred_f));
+      alpha_bn_f =  n_f[i] * theta_f[i] * theta_f_total[i];
     for(k in 1:p){
       y_out[k] += neg_binomial_2_rng(alpha_bn_f[k], alpha_bn_f[k] / kappa[stratum_f[i], k]);
     }
